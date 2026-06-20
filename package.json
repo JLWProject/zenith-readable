@@ -2,7 +2,7 @@
   "name": "zenith-readable",
   "displayName": "Zenith Readable",
   "description": "Zenith theme with improved contrast and full Terraform/HCL colour support. Forked from the original Zenith Theme by britown.",
-  "version": "1.8.1",
+  "version": "1.8.2",
   "publisher": "jordanwalker",
   "license": "MIT",
   "repository": {

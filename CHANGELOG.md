@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.8.2]
+
+- Moved to dedicated public repository
+
 ## [1.8.1]
 
 - Fixed marketplace preview GIF not loading (absolute image URLs)
