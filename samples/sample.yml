@@ -1,0 +1,194 @@
+# ============================================================
+# YAML Sample — Zenith Readable Theme Test
+# ============================================================
+
+# Azure DevOps multi-stage pipeline
+trigger:
+  branches:
+    include:
+      - main
+      - release/*
+  paths:
+    exclude:
+      - "**/*.md"
+      - docs/**
+
+pr:
+  branches:
+    include:
+      - main
+  autoCancel: true
+
+# ------------------------------------------------------------
+# Parameters
+# ------------------------------------------------------------
+
+parameters:
+  - name: environment
+    displayName: Target Environment
+    type: string
+    default: dev
+    values:
+      - dev
+      - test
+      - prod
+
+  - name: runTests
+    displayName: Run Tests
+    type: boolean
+    default: true
+
+  - name: maxRetries
+    type: number
+    default: 3
+
+# ------------------------------------------------------------
+# Variables
+# ------------------------------------------------------------
+
+variables:
+  - group: zenith-global-secrets
+  - name: buildConfiguration
+    value: Release
+  - name: dotnetVersion
+    value: "8.0.x"
+  - name: artifactName
+    value: "drop-$(Build.BuildId)"
+  - ${{ if eq(parameters.environment, 'prod') }}:
+      - name: serviceConnection
+        value: sc-azure-prod
+  - ${{ else }}:
+      - name: serviceConnection
+        value: sc-azure-nonprod
+
+# ------------------------------------------------------------
+# Stages
+# ------------------------------------------------------------
+
+stages:
+  - stage: Build
+    displayName: Build & Test
+    jobs:
+      - job: BuildJob
+        displayName: Build Application
+        pool:
+          vmImage: ubuntu-latest
+        timeoutInMinutes: 30
+
+        steps:
+          - checkout: self
+            fetchDepth: 0
+
+          - task: UseDotNet@2
+            displayName: Use .NET $(dotnetVersion)
+            inputs:
+              version: $(dotnetVersion)
+              includePreviewVersions: false
+
+          - script: |
+              dotnet restore
+              dotnet build --configuration $(buildConfiguration) --no-restore
+            displayName: Restore & Build
+
+          - ${{ if eq(parameters.runTests, true) }}:
+            - task: DotNetCoreCLI@2
+              displayName: Run Unit Tests
+              inputs:
+                command: test
+                projects: "**/*Tests.csproj"
+                arguments: >-
+                  --configuration $(buildConfiguration)
+                  --no-build
+                  --collect:"XPlat Code Coverage"
+                  --results-directory $(Agent.TempDirectory)
+
+          - task: PublishBuildArtifacts@1
+            displayName: Publish Artifact
+            inputs:
+              PathtoPublish: $(Build.ArtifactStagingDirectory)
+              ArtifactName: $(artifactName)
+              publishLocation: Container
+
+  - stage: Deploy
+    displayName: Deploy to ${{ parameters.environment }}
+    dependsOn: Build
+    condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
+
+    jobs:
+      - deployment: DeployApp
+        displayName: Deploy Web App
+        environment: ${{ parameters.environment }}
+        pool:
+          vmImage: ubuntu-latest
+
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - download: current
+                  artifact: $(artifactName)
+
+                - task: AzureWebApp@1
+                  displayName: Deploy to App Service
+                  inputs:
+                    azureSubscription: $(serviceConnection)
+                    appType: webApp
+                    appName: app-zenith-${{ parameters.environment }}
+                    package: $(Pipeline.Workspace)/$(artifactName)/**/*.zip
+                    deploymentMethod: zipDeploy
+
+                - task: AzureAppServiceManage@0
+                  displayName: Restart App Service
+                  inputs:
+                    azureSubscription: $(serviceConnection)
+                    Action: Restart Azure App Service
+                    WebAppName: app-zenith-${{ parameters.environment }}
+
+# ------------------------------------------------------------
+# Kubernetes manifest (embedded for token coverage)
+# ------------------------------------------------------------
+
+# apiVersion: apps/v1
+# kind: Deployment
+# metadata:
+#   name: zenith-app
+#   namespace: default
+#   labels:
+#     app: zenith
+#     version: "1.4.0"
+# spec:
+#   replicas: 3
+#   selector:
+#     matchLabels:
+#       app: zenith
+#   template:
+#     metadata:
+#       labels:
+#         app: zenith
+#     spec:
+#       containers:
+#         - name: zenith-app
+#           image: myregistry.azurecr.io/zenith:latest
+#           ports:
+#             - containerPort: 8080
+#           env:
+#             - name: ASPNETCORE_ENVIRONMENT
+#               value: Production
+#             - name: SECRET_KEY
+#               valueFrom:
+#                 secretKeyRef:
+#                   name: zenith-secrets
+#                   key: secret-key
+#           resources:
+#             requests:
+#               cpu: "250m"
+#               memory: "256Mi"
+#             limits:
+#               cpu: "500m"
+#               memory: "512Mi"
+#           livenessProbe:
+#             httpGet:
+#               path: /health
+#               port: 8080
+#             initialDelaySeconds: 15
+#             periodSeconds: 20

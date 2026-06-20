@@ -1,0 +1,41 @@
+{
+  "name": "zenith-readable",
+  "displayName": "Zenith Readable",
+  "description": "Zenith theme with improved contrast and full Terraform/HCL colour support. Forked from the original Zenith Theme by britown.",
+  "version": "1.8.1",
+  "publisher": "jordanwalker",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jlwproject/zenith-readable"
+  },
+  "keywords": [
+    "theme",
+    "dark",
+    "zenith",
+    "terraform",
+    "hcl",
+    "readable",
+    "color-theme"
+  ],
+  "icon": "icon.png",
+  "galleryBanner": {
+    "color": "#1C1209",
+    "theme": "dark"
+  },
+  "engines": {
+    "vscode": "^1.60.0"
+  },
+  "categories": [
+    "Themes"
+  ],
+  "contributes": {
+    "themes": [
+      {
+        "label": "Zenith Readable",
+        "uiTheme": "vs-dark",
+        "path": "./themes/zenith-readable.json"
+      }
+    ]
+  }
+}
